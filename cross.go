@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
 	"time"
@@ -8,11 +9,12 @@ import (
 
 const dimension = 3
 const n = dimension * dimension
-const nNei = 50
-const nPop = 1000
 const nGeneration = 1000
 const krestik = 1
 const nolik = 2
+
+var nNei = 50
+var nPop = 1000
 
 // доли мутации и типы их
 
@@ -35,8 +37,11 @@ type net []nei
 var pop []net
 var nLife, nWin, nDraw, nLose, sorted []int
 var iGeneration int
+var nameG *string
 
 func main() {
+	nameG = flag.String("n", "default", "Каталог набора")
+
 	tt := time.Now().UnixNano()
 	rand.Seed(tt)
 	pop = make([]net, nPop)
@@ -81,7 +86,7 @@ func mutRule() {
 		mutBoard[i] = 0
 	}
 	for i := 1; i < len(mutProb); i++ {
-		mutBoard[i] = int(mutProb[i-1]*nPop/100.0) + mutBoard[i-1]
+		mutBoard[i] = int(mutProb[i-1]*float32(nPop)/100.0) + mutBoard[i-1]
 	}
 	mutBoard[4] = nPop
 	fmt.Println("mutBoard=", mutBoard)
