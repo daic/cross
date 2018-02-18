@@ -238,6 +238,7 @@ func mutRule() {
 	fmt.Println("mutBoard=", mutBoard)
 }
 func mutOne(sk int, mType int) {
+	defer wg.Done()
 	switch mType {
 	case 0:
 	case 1:
@@ -254,12 +255,14 @@ func randRange(b, e int) int {
 }
 func mutation() {
 	numType := len(mutProb)
-	for sk := 0; sk < nPop; sk++ {
-		for mi := 0; mi < numType; mi++ {
+	for mi := 0; mi < numType; mi++ {
+		for sk := 0; sk < nPop; sk++ {
 			if sk >= mutBoard[mi] && sk < mutBoard[mi+1] {
-				mutOne(sk, mutType[mi])
+				wg.Add(1)
+				go mutOne(sk, mutType[mi])
 			}
 		}
+		wg.Wait()
 	}
 }
 func sexMutation(p, p1, p2 int) {
