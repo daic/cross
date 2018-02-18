@@ -1,14 +1,18 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"math/rand"
+	"os"
+	"sync"
 	"time"
 )
 
 const dimension = 3
 const n = dimension * dimension
+const mem = n * 4
 const nGeneration = 1000
 const krestik = 1
 const nolik = 2
@@ -17,13 +21,9 @@ var nNei = 50
 var nPop = 1000
 
 // доли мутации и типы их
-
 var mutProb []float32
 var mutType []int
 var mutBoard []int
-
-var s [n]byte
-var pos [n * 4]float32
 
 type nei struct {
 	src1 byte
@@ -38,50 +38,196 @@ var pop []net
 var nLife, nWin, nDraw, nLose, sorted []int
 var iGeneration int
 var nameG *string
+var dir string
+var wg sync.WaitGroup
 
 func main() {
 	nameG = flag.String("n", "default", "Каталог набора")
-
+	loadData()
 	tt := time.Now().UnixNano()
 	rand.Seed(tt)
-	pop = make([]net, nPop)
-	nLife = make([]int, nPop)
-	nWin = make([]int, nPop)
-	nLose = make([]int, nPop)
-	nDraw = make([]int, nPop)
-	sorted = make([]int, nPop)
-	mutProb = make([]float32, 4)
-	mutType = make([]int, 4)
-	mutBoard = make([]int, 5)
 
-	mutRule()
-	for p := 0; p < nPop; p++ {
-		pop[p] = make([]nei, nNei, nNei)
-		sorted[p] = p
-	}
-	rand.Seed(42)
-	for p := 0; p < nPop; p++ {
-		pop[p].makeRandom()
-		nLife[p] = 0
-	}
-	iGeneration = 0
 	for iGen := 0; iGen < nGeneration; iGen++ {
 		iGeneration++
 		oneLife()
 		zeroStat()
 		for p1 := 0; p1 < nPop; p1++ {
 			for p2 := 0; p2 < nPop; p2++ {
-				oneGame(p1, p2)
+				wg.Add(1)
+				go oneGame(p1, p2)
 			}
 		}
+		wg.Wait()
 		sortPop()
 		printResult()
 		mutation()
+		if iGeneration%50 == 0 {
+			saveCurrentData(dir)
+		}
+	}
+}
+func loadData() {
+	var data struct {
+		NNei    int
+		NPop    int
+		MutProb [4]float32
+	}
+	data.MutProb = [4]float32{49, 49, 1, 1}
+	mutProb = make([]float32, 4)
+	mutProb = []float32{49, 49, 1, 1}
+	dir, _ = os.Getwd()
+	nameF := dir + "\\" + *nameG + "\\rule.json"
+	conffile, err := os.Open(nameF)
+	newData := false
+	if err == nil {
+		dec := json.NewDecoder(conffile)
+		_ = dec.Decode(&data)
+		nNei = data.NNei
+		nPop = data.NPop
+		for i := 0; i < 4; i++ {
+			mutProb[i] = data.MutProb[i]
+		}
+		fmt.Println("Read", data)
+		conffile.Close()
+	} else {
+		conffile.Close()
+		os.Mkdir(*nameG, 0700)
+		file, _ := os.Create(nameF)
+		data.NNei = nNei
+		data.NPop = nPop
+		for i := 0; i < 4; i++ {
+			data.MutProb[i] = mutProb[i]
+		}
+		enc := json.NewEncoder(file)
+		_ = enc.Encode(data)
+		fmt.Println("Write", data)
+		file.Close()
+		newData = true
+	}
+	pop = make([]net, nPop)
+	nLife = make([]int, nPop)
+	nWin = make([]int, nPop)
+	nLose = make([]int, nPop)
+	nDraw = make([]int, nPop)
+	sorted = make([]int, nPop)
+	mutType = make([]int, 4)
+	mutBoard = make([]int, 5)
+	mutType = []int{0, 1, 2, 3}
+	mutRule()
+	for p := 0; p < nPop; p++ {
+		pop[p] = make([]nei, nNei)
+		sorted[p] = p
+	}
+	for p := 0; p < nPop; p++ {
+		pop[p].makeRandom()
+		nLife[p] = 0
+	}
+	iGeneration = 0
+	if newData == false {
+		loadCurrentData(dir)
+	}
+}
+func loadCurrentData(dir string) {
+	var data struct {
+		IGen  int
+		NLife []int
+	}
+	data.NLife = nLife
+	nameF := dir + "\\" + *nameG + "\\stat.json"
+	conffile, err := os.Open(nameF)
+	if err == nil {
+		dec := json.NewDecoder(conffile)
+		_ = dec.Decode(&data)
+		iGeneration = data.IGen
+		fmt.Println("loadData", data)
+	}
+	var popData struct {
+		Src1 [][]byte
+		Src2 [][]byte
+		Dst  [][]byte
+		K1   [][]float32
+		K2   [][]float32
+	}
+	popData.Src1 = make([][]byte, nPop)
+	popData.Src2 = make([][]byte, nPop)
+	popData.Dst = make([][]byte, nPop)
+	popData.K1 = make([][]float32, nPop)
+	popData.K2 = make([][]float32, nPop)
+	for k := 0; k < nPop; k++ {
+		popData.Src1[k] = make([]byte, nNei)
+		popData.Src2[k] = make([]byte, nNei)
+		popData.Dst[k] = make([]byte, nNei)
+		popData.K1[k] = make([]float32, nNei)
+		popData.K2[k] = make([]float32, nNei)
+	}
+	nameF = dir + "\\" + *nameG + "\\pop.json"
+	conffile, err = os.Open(nameF)
+	if err == nil {
+		dec := json.NewDecoder(conffile)
+		_ = dec.Decode(&popData)
+		for k := 0; k < nPop; k++ {
+			for i := 0; i < nNei; i++ {
+				pop[k][i].src1 = popData.Src1[k][i]
+				pop[k][i].src2 = popData.Src2[k][i]
+				pop[k][i].dst = popData.Dst[k][i]
+				pop[k][i].k1 = popData.K1[k][i]
+				pop[k][i].k2 = popData.K2[k][i]
+			}
+		}
+	}
+}
+func saveCurrentData(dir string) {
+	var data struct {
+		IGen  int
+		NLife []int
+	}
+	data.NLife = nLife
+	data.IGen = iGeneration
+	nameF := dir + "\\" + *nameG + "\\stat.json"
+	conffile, err := os.Create(nameF)
+	if err == nil {
+		enc := json.NewEncoder(conffile)
+		_ = enc.Encode(data)
+		iGeneration = data.IGen
+		fmt.Println("saveData", data)
+		conffile.Close()
+	}
+	var popData struct {
+		Src1 [][]byte
+		Src2 [][]byte
+		Dst  [][]byte
+		K1   [][]float32
+		K2   [][]float32
+	}
+	popData.Src1 = make([][]byte, nPop)
+	popData.Src2 = make([][]byte, nPop)
+	popData.Dst = make([][]byte, nPop)
+	popData.K1 = make([][]float32, nPop)
+	popData.K2 = make([][]float32, nPop)
+	for k := 0; k < nPop; k++ {
+		popData.Src1[k] = make([]byte, nNei)
+		popData.Src2[k] = make([]byte, nNei)
+		popData.Dst[k] = make([]byte, nNei)
+		popData.K1[k] = make([]float32, nNei)
+		popData.K2[k] = make([]float32, nNei)
+		for i := 0; i < nNei; i++ {
+			popData.Src1[k][i] = pop[k][i].src1
+			popData.Src2[k][i] = pop[k][i].src2
+			popData.Dst[k][i] = pop[k][i].dst
+			popData.K1[k][i] = pop[k][i].k1
+			popData.K2[k][i] = pop[k][i].k2
+		}
+	}
+	nameF = dir + "\\" + *nameG + "\\pop.json"
+	conffile, err = os.Create(nameF)
+	if err == nil {
+		enc := json.NewEncoder(conffile)
+		_ = enc.Encode(popData)
+
+		conffile.Close()
 	}
 }
 func mutRule() {
-	mutProb = []float32{20, 35, 35, 10}
-	mutType = []int{0, 1, 2, 3}
 	for i := 0; i < len(mutProb); i++ {
 		mutBoard[i] = 0
 	}
@@ -104,7 +250,7 @@ func mutOne(sk int, mType int) {
 	}
 }
 func randRange(b, e int) int {
-	return sorted[rand.Intn(e)+b]
+	return sorted[rand.Intn(e-b)+b]
 }
 func mutation() {
 	numType := len(mutProb)
@@ -200,16 +346,21 @@ func sortPop() {
 	}
 }
 func oneGame(p1, p2 int) {
-	setNull()
+	defer wg.Done()
+	var s [n]byte
+	for i := 0; i < n; i++ {
+		s[i] = 0
+	}
+	var pos [mem]float32
 	win := 0
 	turn := 1
 	for t := 0; t < n; t++ {
-		setPos()
+		setPos(s, &pos)
 		if turn == 1 {
-			play(p1)
+			play(p1, &pos)
 		} else if turn == 2 {
-			invertPos()
-			play(p2)
+			invertPos(&pos)
+			play(p2, &pos)
 		}
 		tec := -1
 		for i := 0; i < n; i++ {
@@ -222,18 +373,12 @@ func oneGame(p1, p2 int) {
 			}
 		}
 		s[tec] = byte(turn)
-		win = result()
+		win = result(s)
 		if turn == 1 {
 			turn = 2
 		} else {
 			turn = 1
 		}
-		/*if win != 0 && p1 == 501 && p2 == 502 {
-			fmt.Println("(", s[0], s[1], s[2], ")(", p1, p2, ")")
-			fmt.Println("(", s[3], s[4], s[5], ")")
-			fmt.Println("(", s[6], s[7], s[8], ")")
-			fmt.Println(pos)
-		}*/
 		if win != 0 {
 			break
 		}
@@ -249,12 +394,12 @@ func oneGame(p1, p2 int) {
 		nDraw[p2]++
 	}
 }
-func play(p int) {
+func play(p int, pos *[mem]float32) {
 	for i := 0; i < nNei; i++ {
 		pos[pop[p][i].dst] = pos[pop[p][i].src1]*pop[p][i].k1 + pos[pop[p][i].src2]*pop[p][i].k2
 	}
 }
-func result() int {
+func result(s [n]byte) int {
 	for p := 1; p <= 2; p++ {
 		if (s[0] == byte(p)) && (s[1] == byte(p)) && (s[2] == byte(p)) {
 			return p
@@ -276,12 +421,7 @@ func result() int {
 	}
 	return 0
 }
-func setNull() {
-	for i := 0; i < n; i++ {
-		s[i] = 0
-	}
-}
-func setPos() {
+func setPos(s [n]byte, pos *[mem]float32) {
 	for i := 0; i < n*2; i++ {
 		pos[i] = 0.0
 	}
@@ -296,7 +436,7 @@ func setPos() {
 		pos[i] = 1.0
 	}
 }
-func invertPos() {
+func invertPos(pos *[mem]float32) {
 	for i := 0; i < n; i++ {
 		pos[i], pos[n+i] = pos[n+i], pos[i]
 	}
