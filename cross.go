@@ -56,8 +56,8 @@ func main() {
 				wg.Add(1)
 				go oneGame(p1, p2)
 			}
+			wg.Wait()
 		}
-		wg.Wait()
 		sortPop()
 		printResult()
 		mutation()
