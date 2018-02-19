@@ -35,11 +35,14 @@ type nei struct {
 type net []nei
 
 var pop []net
-var nLife, nWin, nDraw, nLose, sorted []int
+var nLife, nWin, nDraw, nLose, sorted, rang []int
+var gameResults [][]int
 var iGeneration int
 var nameG *string
 var dir string
 var wg sync.WaitGroup
+var start, end time.Time
+var elapsed time.Duration
 
 func main() {
 	nameG = flag.String("n", "default", "Каталог набора")
@@ -49,6 +52,7 @@ func main() {
 
 	for iGen := 0; iGen < nGeneration; iGen++ {
 		iGeneration++
+		start = time.Now()
 		oneLife()
 		zeroStat()
 		for p1 := 0; p1 < nPop; p1++ {
@@ -59,8 +63,14 @@ func main() {
 			wg.Wait()
 		}
 		sortPop()
+		end = time.Now()
+		elapsed = end.Sub(start)
 		printResult()
+		start = time.Now()
 		mutation()
+		end = time.Now()
+		elapsed = end.Sub(start)
+		fmt.Println("Mutation duration", elapsed)
 		if iGeneration%50 == 0 {
 			saveCurrentData(dir)
 		}
@@ -110,6 +120,14 @@ func loadData() {
 	nLose = make([]int, nPop)
 	nDraw = make([]int, nPop)
 	sorted = make([]int, nPop)
+	rang = make([]int, nPop)
+	for k := 0; k < nPop-1; k++ {
+		rang[k] = -1
+	}
+	gameResults = make([][]int, nPop)
+	for i := 0; i < nPop; i++ {
+		gameResults[i] = make([]int, nPop)
+	}
 	mutType = make([]int, 4)
 	mutBoard = make([]int, 5)
 	mutType = []int{0, 1, 2, 3}
@@ -223,7 +241,6 @@ func saveCurrentData(dir string) {
 	if err == nil {
 		enc := json.NewEncoder(conffile)
 		_ = enc.Encode(popData)
-
 		conffile.Close()
 	}
 }
@@ -244,8 +261,11 @@ func mutOne(sk int, mType int) {
 	case 1:
 		shiftMutation(sorted[sk], 3, 0.02)
 	case 2:
-		//copyMutation(sorted[sk], randRange(mutBoard[0], mutBoard[1]), 3, 0.1, 0.02)
-		sexMutation(sorted[sk], randRange(mutBoard[0], mutBoard[1]), randRange(mutBoard[1], mutBoard[2]))
+		if rand.Intn(2) == 0 {
+			copyMutation(sorted[sk], randRange(mutBoard[0], mutBoard[1]), 10, 0.1, 0.005)
+		} else {
+			sexMutation(sorted[sk], randRange(mutBoard[0], mutBoard[1]), randRange(mutBoard[1], mutBoard[2]))
+		}
 	case 3:
 		pop[sorted[sk]].makeRandom()
 		nLife[sorted[sk]] = 0
@@ -350,7 +370,7 @@ func printResult() {
 	fmt.Println("G=", iGeneration, ",(draw=", draw/2, ") best(", sorted[0], "-", nLife[sorted[0]], ")(",
 		nWin[sorted[0]], nLose[sorted[0]], nDraw[sorted[0]], ") worst(", sorted[nPop-1], "-", nLife[sorted[nPop-1]], ")(",
 		nWin[sorted[nPop-1]], nLose[sorted[nPop-1]], nDraw[sorted[nPop-1]], "), bLife(", iBestLife, "-", nLife[iBestLife], "-", rangBest, ")(",
-		nWin[iBestLife], nLose[iBestLife], nDraw[iBestLife], ") del(", del, ")")
+		nWin[iBestLife], nLose[iBestLife], nDraw[iBestLife], ") del(", del, ")", elapsed)
 
 }
 func score(p int) int {
@@ -369,9 +389,25 @@ func sortPop() {
 			break
 		}
 	}
+	for sk := 0; sk < nPop-1; sk++ {
+		rang[sorted[sk]] = sk
+	}
 }
 func oneGame(p1, p2 int) {
 	defer wg.Done()
+	if rang[p1] >= 0 && rang[p1] < mutBoard[1] && rang[p2] >= 0 && rang[p2] < mutBoard[1] {
+		if gameResults[p1][p2] == 2 {
+			nWin[p1]++
+			nLose[p2]++
+		} else if gameResults[p1][p2] == 0 {
+			nWin[p2]++
+			nLose[p1]++
+		} else if gameResults[p1][p2] == 1 {
+			nDraw[p2]++
+			nDraw[p1]++
+		}
+		return
+	}
 	var s [n]byte
 	for i := 0; i < n; i++ {
 		s[i] = 0
@@ -411,12 +447,15 @@ func oneGame(p1, p2 int) {
 	if win == 1 {
 		nWin[p1]++
 		nLose[p2]++
+		gameResults[p1][p2] = 2
 	} else if win == 2 {
 		nWin[p2]++
 		nLose[p1]++
+		gameResults[p1][p2] = 0
 	} else {
 		nDraw[p1]++
 		nDraw[p2]++
+		gameResults[p1][p2] = 1
 	}
 }
 func play(p int, pos *[mem]float32) {
