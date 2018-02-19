@@ -242,8 +242,9 @@ func mutOne(sk int, mType int) {
 	switch mType {
 	case 0:
 	case 1:
-		shiftMutation(sorted[sk], 3, 0.2)
+		shiftMutation(sorted[sk], 3, 0.02)
 	case 2:
+		//copyMutation(sorted[sk], randRange(mutBoard[0], mutBoard[1]), 3, 0.1, 0.02)
 		sexMutation(sorted[sk], randRange(mutBoard[0], mutBoard[1]), randRange(mutBoard[1], mutBoard[2]))
 	case 3:
 		pop[sorted[sk]].makeRandom()
@@ -292,6 +293,27 @@ func shiftMutation(p int, period int, shift float32) {
 		if rand.Intn(period) == 0 {
 			pop[p][i].k1 = pop[p][i].k1 + (rand.Float32()*2-1.0)*shift
 			pop[p][i].k2 = pop[p][i].k1 + (rand.Float32()*2-1.0)*shift
+
+		}
+	}
+}
+func copyMutation(p, p1, period int, shift float32, prob float32) {
+	nLife[p] = 0
+	for i := 0; i < nNei; i++ {
+		neiCopy(pop[p][i], pop[p1][i])
+		if rand.Intn(period) == 0 {
+			pop[p][i].k1 = pop[p][i].k1 + (rand.Float32()*2-1.0)*shift
+			pop[p][i].k2 = pop[p][i].k1 + (rand.Float32()*2-1.0)*shift
+
+		}
+		if rand.Float32() < prob {
+			pop[p][i].src1 = byte(rIntn(4 * n))
+		}
+		if rand.Float32() < prob {
+			pop[p][i].src2 = byte(rIntn(4 * n))
+		}
+		if rand.Float32() < prob {
+			pop[p][i].dst = byte(rIntn(4 * n))
 		}
 	}
 }
