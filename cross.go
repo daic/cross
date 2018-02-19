@@ -35,8 +35,7 @@ type nei struct {
 type net []nei
 
 var pop []net
-var nLife, nWin, nDraw, nLose, sorted, rang []int
-var gameResults [][]int
+var nLife, nWin, nDraw, nLose, sorted []int
 var iGeneration int
 var nameG *string
 var dir string
@@ -120,14 +119,6 @@ func loadData() {
 	nLose = make([]int, nPop)
 	nDraw = make([]int, nPop)
 	sorted = make([]int, nPop)
-	rang = make([]int, nPop)
-	for k := 0; k < nPop-1; k++ {
-		rang[k] = -1
-	}
-	gameResults = make([][]int, nPop)
-	for i := 0; i < nPop; i++ {
-		gameResults[i] = make([]int, nPop)
-	}
 	mutType = make([]int, 4)
 	mutBoard = make([]int, 5)
 	mutType = []int{0, 1, 2, 3}
@@ -377,6 +368,7 @@ func score(p int) int {
 	return nWin[p]*2 + nDraw[p]
 }
 func sortPop() {
+
 	for {
 		shift := 0
 		for sk := 0; sk < nPop-1; sk++ {
@@ -389,25 +381,10 @@ func sortPop() {
 			break
 		}
 	}
-	for sk := 0; sk < nPop-1; sk++ {
-		rang[sorted[sk]] = sk
-	}
+
 }
 func oneGame(p1, p2 int) {
 	defer wg.Done()
-	if rang[p1] >= 0 && rang[p1] < mutBoard[1] && rang[p2] >= 0 && rang[p2] < mutBoard[1] {
-		if gameResults[p1][p2] == 2 {
-			nWin[p1]++
-			nLose[p2]++
-		} else if gameResults[p1][p2] == 0 {
-			nWin[p2]++
-			nLose[p1]++
-		} else if gameResults[p1][p2] == 1 {
-			nDraw[p2]++
-			nDraw[p1]++
-		}
-		return
-	}
 	var s [n]byte
 	for i := 0; i < n; i++ {
 		s[i] = 0
@@ -447,15 +424,12 @@ func oneGame(p1, p2 int) {
 	if win == 1 {
 		nWin[p1]++
 		nLose[p2]++
-		gameResults[p1][p2] = 2
 	} else if win == 2 {
 		nWin[p2]++
 		nLose[p1]++
-		gameResults[p1][p2] = 0
 	} else {
 		nDraw[p1]++
 		nDraw[p2]++
-		gameResults[p1][p2] = 1
 	}
 }
 func play(p int, pos *[mem]float32) {
