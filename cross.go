@@ -348,7 +348,6 @@ func shiftMutation(p int, period int, shift float32) {
 		if rand.Intn(period) == 0 {
 			pop[p][i].k1 = pop[p][i].k1 + (rand.Float32()*2-1.0)*shift
 			pop[p][i].k2 = pop[p][i].k1 + (rand.Float32()*2-1.0)*shift
-
 		}
 	}
 }
@@ -357,7 +356,7 @@ func copyMutation2(p, p1 int) {
 		neiCopy(pop[p][i], pop[p1][i])
 	}
 	nLife[p] = nLife[p1]
-	sMut[p] = sMut[p1]
+	sMut[p] = sMut[p1] + 1
 	cMut[p] = cMut[p1]
 	commonMutation(p)
 }
