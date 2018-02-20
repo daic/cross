@@ -18,7 +18,7 @@ const krestik = 1
 const nolik = 2
 
 var nNei = 50
-var nPop = 1000
+var nPop = 500
 
 // доли мутации и типы их
 var mutProb []float32
@@ -36,6 +36,7 @@ type net []nei
 
 var pop []net
 var nLife, nWin, nDraw, nLose, sorted []int
+var sMut, cMut []int
 var iGeneration int
 var nameG *string
 var dir string
@@ -123,6 +124,8 @@ func loadData() {
 	nWin = make([]int, nPop)
 	nLose = make([]int, nPop)
 	nDraw = make([]int, nPop)
+	sMut = make([]int, nPop)
+	cMut = make([]int, nPop)
 	sorted = make([]int, nPop)
 	mutType = make([]int, 4)
 	mutBoard = make([]int, 5)
@@ -145,8 +148,12 @@ func loadCurrentData(dir string) {
 	var data struct {
 		IGen  int
 		NLife []int
+		SMut  []int
+		CMut  []int
 	}
 	data.NLife = nLife
+	data.SMut = sMut
+	data.CMut = cMut
 	nameF := dir + "\\" + *nameG + "\\stat.json"
 	conffile, err := os.Open(nameF)
 	if err == nil {
@@ -194,8 +201,12 @@ func saveCurrentData(dir string) {
 	var data struct {
 		IGen  int
 		NLife []int
+		SMut  []int
+		CMut  []int
 	}
 	data.NLife = nLife
+	data.SMut = sMut
+	data.CMut = cMut
 	data.IGen = iGeneration
 	nameF := dir + "\\" + *nameG + "\\stat.json"
 	conffile, err := os.Create(nameF)
@@ -259,16 +270,22 @@ func mutOne(sk int, mType int) {
 		copyMutation2(sorted[sk], randRange(mutBoard[0], mutBoard[1]))
 		//shiftMutation(sorted[sk], 3, 0.02)
 	case 2:
-		copyMutation2(sorted[sk], randRange(mutBoard[0], mutBoard[1]))
+		//copyMutation2(sorted[sk], randRange(mutBoard[0], mutBoard[1]))
+		sexMutation(sorted[sk], randRange(mutBoard[0], mutBoard[1]), randRange(mutBoard[1], mutBoard[2]))
 		/*if rand.Intn(2) == 0 {
 			copyMutation(sorted[sk], randRange(mutBoard[0], mutBoard[1]), 10, 0.1, 0.005)
 		} else {
 			sexMutation(sorted[sk], randRange(mutBoard[0], mutBoard[1]), randRange(mutBoard[1], mutBoard[2]))
 		}*/
 	case 3:
-		pop[sorted[sk]].makeRandom()
-		nLife[sorted[sk]] = 0
+		randomMutation(sorted[sk])
 	}
+}
+func randomMutation(p int) {
+	pop[p].makeRandom()
+	nLife[p] = 0
+	sMut[p] = 0
+	cMut[p] = 0
 }
 func randRange(b, e int) int {
 	return sorted[rand.Intn(e-b)+b]
@@ -289,11 +306,12 @@ func commonMutation(p int) {
 	if nLose[p] == 0 {
 		return
 	}
+	cMut[p]++
 	prob := float32(nLose[p]) / float32(nWin[p]+nLose[p]+nDraw[p])
 	for i := 0; i < nNei; i++ {
 		if rand.Float32() < prob {
 			pop[p][i].k1 = pop[p][i].k1 + (rand.Float32()*2-1.0)*0.05
-			pop[p][i].k2 = pop[p][i].k1 + (rand.Float32()*2-1.0)*0.05
+			pop[p][i].k2 = pop[p][i].k2 + (rand.Float32()*2-1.0)*0.05
 		}
 		if rand.Float32() < prob*0.01 {
 			pop[p][i].src1 = byte(rIntn(4 * n))
@@ -308,16 +326,15 @@ func commonMutation(p int) {
 }
 func sexMutation(p, p1, p2 int) {
 	nLife[p] = 0
-	sh := 1
+	sMut[p]++
 	for i := 0; i < nNei; i++ {
-		if sh == 1 {
+		if i < int(nNei/2) {
 			neiCopy(pop[p][i], pop[p1][i])
-			sh = 2
-		} else if sh == 2 {
+		} else {
 			neiCopy(pop[p][i], pop[p2][i])
-			sh = 1
 		}
 	}
+	commonMutation(p)
 }
 func neiCopy(ne, ne1 nei) {
 	ne.k1 = ne1.k1
@@ -339,6 +356,9 @@ func copyMutation2(p, p1 int) {
 	for i := 0; i < nNei; i++ {
 		neiCopy(pop[p][i], pop[p1][i])
 	}
+	nLife[p] = nLife[p1]
+	sMut[p] = sMut[p1]
+	cMut[p] = cMut[p1]
 	commonMutation(p)
 }
 func copyMutation(p, p1, period int, shift float32, prob float32) {
@@ -386,15 +406,15 @@ func printResult() {
 			break
 		}
 	}
-	for sk := mutBoard[3]; sk < nPop; sk++ {
+	for sk := mutBoard[2]; sk < nPop; sk++ {
 		if nLife[sorted[sk]] > 1 {
 			del++
 		}
 	}
-	fmt.Println("G=", iGeneration, ",(draw=", draw/2, ") best(", sorted[0], "-", nLife[sorted[0]], ")(",
-		nWin[sorted[0]], nLose[sorted[0]], nDraw[sorted[0]], ") worst(", sorted[nPop-1], "-", nLife[sorted[nPop-1]], ")(",
-		nWin[sorted[nPop-1]], nLose[sorted[nPop-1]], nDraw[sorted[nPop-1]], "), bLife(", iBestLife, "-", nLife[iBestLife], "-", rangBest, ")(",
-		nWin[iBestLife], nLose[iBestLife], nDraw[iBestLife], ") del(", del, ")", elapsed)
+	fmt.Println("G=", iGeneration, ",(draw=", draw/2, ") best(", sorted[0], "-", nLife[sorted[0]], "sMut=", sMut[sorted[0]], "cMut=", cMut[sorted[0]], ")(",
+		nWin[sorted[0]], nLose[sorted[0]], nDraw[sorted[0]], ") \n worst(", sorted[nPop-1], "-", nLife[sorted[nPop-1]], "sMut=", sMut[sorted[nPop-1]], "cMut=", cMut[sorted[nPop-1]], ")(",
+		nWin[sorted[nPop-1]], nLose[sorted[nPop-1]], nDraw[sorted[nPop-1]], ") del(", del, ") \n bLife(", iBestLife, "-", nLife[iBestLife], "rang=", rangBest, "sMut=", sMut[iBestLife], "cMut=", cMut[iBestLife], ")(",
+		nWin[iBestLife], nLose[iBestLife], nDraw[iBestLife], ")", elapsed)
 
 }
 func score(p int) int {
@@ -544,6 +564,7 @@ func groupAnalyse() {
 	charRep = make([]int, nPop)
 	numGroup := 0
 	var maxCoin, midLife float32
+	midLife = 0.0
 	coin := func(i, k int) float32 {
 		nCoin := 0
 		nAll := 0
