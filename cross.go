@@ -64,14 +64,19 @@ func main() {
 		sortPop()
 		end = time.Now()
 		elapsed = end.Sub(start)
-		printResult()
+		if iGeneration%10 == 0 {
+			printResult()
+		}
 		start = time.Now()
 		mutation()
 		end = time.Now()
 		elapsed = end.Sub(start)
-		fmt.Println("Mutation duration", elapsed)
+		if iGeneration%10 == 0 {
+			fmt.Println("Mutation duration", elapsed)
+		}
 		if iGeneration%50 == 0 {
 			saveCurrentData(dir)
+			groupAnalyse()
 		}
 	}
 }
@@ -198,7 +203,7 @@ func saveCurrentData(dir string) {
 		enc := json.NewEncoder(conffile)
 		_ = enc.Encode(data)
 		iGeneration = data.IGen
-		fmt.Println("saveData", data)
+		//fmt.Println("saveData", data)
 		conffile.Close()
 	}
 	var popData struct {
@@ -247,16 +252,19 @@ func mutRule() {
 }
 func mutOne(sk int, mType int) {
 	defer wg.Done()
+	//commonMutation(sorted[sk])
 	switch mType {
 	case 0:
 	case 1:
-		shiftMutation(sorted[sk], 3, 0.02)
+		copyMutation2(sorted[sk], randRange(mutBoard[0], mutBoard[1]))
+		//shiftMutation(sorted[sk], 3, 0.02)
 	case 2:
-		if rand.Intn(2) == 0 {
+		copyMutation2(sorted[sk], randRange(mutBoard[0], mutBoard[1]))
+		/*if rand.Intn(2) == 0 {
 			copyMutation(sorted[sk], randRange(mutBoard[0], mutBoard[1]), 10, 0.1, 0.005)
 		} else {
 			sexMutation(sorted[sk], randRange(mutBoard[0], mutBoard[1]), randRange(mutBoard[1], mutBoard[2]))
-		}
+		}*/
 	case 3:
 		pop[sorted[sk]].makeRandom()
 		nLife[sorted[sk]] = 0
@@ -277,6 +285,27 @@ func mutation() {
 		wg.Wait()
 	}
 }
+func commonMutation(p int) {
+	if nLose[p] == 0 {
+		return
+	}
+	prob := float32(nLose[p]) / float32(nWin[p]+nLose[p]+nDraw[p])
+	for i := 0; i < nNei; i++ {
+		if rand.Float32() < prob {
+			pop[p][i].k1 = pop[p][i].k1 + (rand.Float32()*2-1.0)*0.05
+			pop[p][i].k2 = pop[p][i].k1 + (rand.Float32()*2-1.0)*0.05
+		}
+		if rand.Float32() < prob*0.01 {
+			pop[p][i].src1 = byte(rIntn(4 * n))
+		}
+		if rand.Float32() < prob*0.01 {
+			pop[p][i].src2 = byte(rIntn(4 * n))
+		}
+		if rand.Float32() < prob*0.01 {
+			pop[p][i].dst = byte(rIntn(4 * n))
+		}
+	}
+}
 func sexMutation(p, p1, p2 int) {
 	nLife[p] = 0
 	sh := 1
@@ -288,9 +317,7 @@ func sexMutation(p, p1, p2 int) {
 			neiCopy(pop[p][i], pop[p2][i])
 			sh = 1
 		}
-
 	}
-
 }
 func neiCopy(ne, ne1 nei) {
 	ne.k1 = ne1.k1
@@ -307,6 +334,12 @@ func shiftMutation(p int, period int, shift float32) {
 
 		}
 	}
+}
+func copyMutation2(p, p1 int) {
+	for i := 0; i < nNei; i++ {
+		neiCopy(pop[p][i], pop[p1][i])
+	}
+	commonMutation(p)
 }
 func copyMutation(p, p1, period int, shift float32, prob float32) {
 	nLife[p] = 0
@@ -353,7 +386,7 @@ func printResult() {
 			break
 		}
 	}
-	for sk := mutBoard[2]; sk < nPop; sk++ {
+	for sk := mutBoard[3]; sk < nPop; sk++ {
 		if nLife[sorted[sk]] > 1 {
 			del++
 		}
@@ -368,7 +401,6 @@ func score(p int) int {
 	return nWin[p]*2 + nDraw[p]
 }
 func sortPop() {
-
 	for {
 		shift := 0
 		for sk := 0; sk < nPop-1; sk++ {
@@ -381,7 +413,6 @@ func sortPop() {
 			break
 		}
 	}
-
 }
 func oneGame(p1, p2 int) {
 	defer wg.Done()
@@ -506,4 +537,54 @@ func rIntn(max int) int {
 }
 func rFloat32() float32 {
 	return rand.Float32()
+}
+func groupAnalyse() {
+	var groups, charRep []int
+	groups = make([]int, nPop)
+	charRep = make([]int, nPop)
+	numGroup := 0
+	var maxCoin, midLife float32
+	coin := func(i, k int) float32 {
+		nCoin := 0
+		nAll := 0
+		for m := 0; m < nNei; m++ {
+			nAll = nAll + 3
+			if pop[charRep[i]][m].src1 == pop[k][m].src1 {
+				nCoin++
+			}
+			if pop[charRep[i]][m].src2 == pop[k][m].src2 {
+				nCoin++
+			}
+			if pop[charRep[i]][m].dst == pop[k][m].dst {
+				nCoin++
+			}
+		}
+		return float32(nCoin) / float32(nAll)
+	}
+	for k := 0; k < nPop; k++ {
+		b := true
+		midLife = midLife + float32(nLife[k])
+		for i := 0; i < numGroup; i++ {
+			co := coin(i, k)
+			if co > maxCoin {
+				maxCoin = co
+			}
+			if co > 0.8 {
+				groups[i]++
+				b = false
+				break
+			}
+		}
+		if b == true {
+			charRep[numGroup] = k
+			numGroup++
+		}
+	}
+	for i := 0; i < 10; i++ {
+		if groups[i] > 5 {
+			fmt.Println(i, ")", groups[i])
+		}
+	}
+	midLife = midLife / float32(nPop)
+	fmt.Println("nGroup=", numGroup, "Pop=", nPop, "MaxCoin=", maxCoin, "midLife=", midLife)
 }
