@@ -13,7 +13,7 @@ import (
 const dimension = 3
 const n = dimension * dimension
 const mem = n * 4
-const nGeneration = 1000
+const nGeneration = 10000
 const krestik = 1
 const nolik = 2
 
@@ -271,7 +271,7 @@ func mutOne(sk int, mType int) {
 		//shiftMutation(sorted[sk], 3, 0.02)
 	case 2:
 		//copyMutation2(sorted[sk], randRange(mutBoard[0], mutBoard[1]))
-		sexMutation(sorted[sk], randRange(mutBoard[0], mutBoard[1]), randRange(mutBoard[1], mutBoard[2]))
+		sexMutation(sorted[sk], randRange(mutBoard[0], mutBoard[1]), randRange(mutBoard[0], mutBoard[1]))
 		/*if rand.Intn(2) == 0 {
 			copyMutation(sorted[sk], randRange(mutBoard[0], mutBoard[1]), 10, 0.1, 0.005)
 		} else {
@@ -410,9 +410,9 @@ func printResult() {
 			del++
 		}
 	}
-	fmt.Println("G=", iGeneration, ",(draw=", draw/2, ") best(", sorted[0], "-", nLife[sorted[0]], "sMut=", sMut[sorted[0]], "cMut=", cMut[sorted[0]], ")(",
-		nWin[sorted[0]], nLose[sorted[0]], nDraw[sorted[0]], ") \n worst(", sorted[nPop-1], "-", nLife[sorted[nPop-1]], "sMut=", sMut[sorted[nPop-1]], "cMut=", cMut[sorted[nPop-1]], ")(",
-		nWin[sorted[nPop-1]], nLose[sorted[nPop-1]], nDraw[sorted[nPop-1]], ") del(", del, ") \n bLife(", iBestLife, "-", nLife[iBestLife], "rang=", rangBest, "sMut=", sMut[iBestLife], "cMut=", cMut[iBestLife], ")(",
+	fmt.Println("G=", iGeneration, ",(draw=", draw/2, ") best(", sorted[0], "-", iGeneration-nLife[sorted[0]], "sMut=", sMut[sorted[0]], "cMut=", cMut[sorted[0]], ")(",
+		nWin[sorted[0]], nLose[sorted[0]], nDraw[sorted[0]], ") \n worst(", sorted[nPop-1], "-", iGeneration-nLife[sorted[nPop-1]], "sMut=", sMut[sorted[nPop-1]], "cMut=", cMut[sorted[nPop-1]], ")(",
+		nWin[sorted[nPop-1]], nLose[sorted[nPop-1]], nDraw[sorted[nPop-1]], ") del(", del, ") \n bLife(", iBestLife, "-", iGeneration-nLife[iBestLife], "rang=", rangBest, "sMut=", sMut[iBestLife], "cMut=", cMut[iBestLife], ")(",
 		nWin[iBestLife], nLose[iBestLife], nDraw[iBestLife], ")", elapsed)
 
 }
@@ -564,7 +564,7 @@ func groupAnalyse() {
 	numGroup := 0
 	var maxCoin, midLife float32
 	midLife = 0.0
-	coin := func(i, k int) float32 {
+	/*coin := func(i, k int) float32 {
 		nCoin := 0
 		nAll := 0
 		for m := 0; m < nNei; m++ {
@@ -580,16 +580,12 @@ func groupAnalyse() {
 			}
 		}
 		return float32(nCoin) / float32(nAll)
-	}
+	}*/
 	for k := 0; k < nPop; k++ {
 		b := true
 		midLife = midLife + float32(nLife[k])
 		for i := 0; i < numGroup; i++ {
-			co := coin(i, k)
-			if co > maxCoin {
-				maxCoin = co
-			}
-			if co > 0.8 {
+			if nLife[charRep[i]] == nLife[k] {
 				groups[i]++
 				b = false
 				break
@@ -600,9 +596,11 @@ func groupAnalyse() {
 			numGroup++
 		}
 	}
-	for i := 0; i < 10; i++ {
-		if groups[i] > 5 {
-			fmt.Println(i, ")", groups[i])
+	for g := 0; g < iGeneration; g++ {
+		for i := 0; i < numGroup; i++ {
+			if (iGeneration-nLife[charRep[i]]) == g && groups[i] > 2 {
+				fmt.Println(g, ")\t", groups[i])
+			}
 		}
 	}
 	midLife = midLife / float32(nPop)
